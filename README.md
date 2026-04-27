@@ -1,18 +1,18 @@
-# QR Battleship v2 — Refactored Architecture
+# QR Battleship v2 
 
-A re-architected version of [QR Battleship v1](https://github.com/GreenHamze/QR-Battleship), built in response to architectural feedback from the project instructor. The game itself is unchanged from the player's perspective. What changed is how the work is divided between the CPEE process and the Node.js backend, and how visible the decision-making is when reading the process graph.
+A re-architected version of [QR Battleship v1](https://github.com/GreenHamze/QR-Battleship). The game itself is unchanged from the player's perspective. What changed is how the work is divided between the CPEE process and the Node.js backend, and how visible the decision-making is when reading the process graph.
 
 This v2 lives in its own repository so the two versions can be compared side by side. The v1 repo is preserved as-is.
 
 ## Architectural Improvements
 
-After v1 was presented, the instructor raised three concerns about the architecture:
+After v1 was presented, three concerns about the architecture were raised:
 
 1. **No real separation of concerns.** The project was built like a developer would write it, not like an architect would design it. UI, state, and decision logic were entangled.
 2. **No real mediator.** CPEE was technically between the UI and the backend, but it was orchestrating at too high a level — the backend was making most of the interesting decisions.
 3. **Computer logic should be swappable without touching backend code.** Because the computer's strategy lived inside the backend's `ensure-player-turn` endpoint, swapping strategies required editing the Node.js source.
 
-A fourth, related observation: **the CPEE log should tell you everything without needing Celonis.** In v1, the log read "called `ensure-player-turn` → got result back." The interesting decisions — whose turn, where to shoot, did someone win — were inside the backend, invisible to CPEE's log.
+A fourth, related observation: **the CPEE log should tell you everything without needing Celonis.** In v1, the log read "called `ensure-player-turn` → got result back." The interesting decisions (whose turn, where to shoot, did someone win) were inside the backend, invisible to CPEE's log.
 
 v2 addresses each of these concerns with a specific change.
 
@@ -22,13 +22,13 @@ v2 addresses each of these concerns with a specific change.
 v1's `ensure-player-turn` bundled three concerns into one call: check whose turn it is, choose a coordinate if the computer is up, apply the move. v2 separates these. `_whose-turn` is a pure read — given a game ID, return whose turn it is and whether the game is over. `_apply-move` is a neutral mutation — given a game ID, an actor (`player` or `computer`), and a coordinate, apply the move. The two are composed by the CPEE process, not bundled inside the backend.
 
 **Computer strategy moved into the CPEE process as a Script block.**
-v1 had a `pickRandomTarget` function inside `services/computerService.js`, called automatically by `ensure-player-turn`. To change the computer's strategy, you had to edit Node.js code, redeploy the service, and restart it. In v2, the strategy lives in a CPEE Script block named `Strategy: Pick Target`. It reads the player's board state from `_view`, picks a coordinate in plain Ruby, and writes it to a CPEE data variable. To swap strategies, you edit one block in the CPEE cockpit. No code deploy, no backend touch, no service restart. This is the literal answer to the instructor's third complaint.
+v1 had a `pickRandomTarget` function inside `services/computerService.js`, called automatically by `ensure-player-turn`. To change the computer's strategy, you had to edit Node.js code, redeploy the service, and restart it. In v2, the strategy lives in a CPEE Script block named `Strategy: Pick Target`. It reads the player's board state from `_view`, picks a coordinate in plain Ruby, and writes it to a CPEE data variable. To swap strategies, you edit one block in the CPEE cockpit. No code deploy, no backend touch, no service restart. 
 
 **The CPEE process became an explicit state machine.**
 v1's main loop alternated between `Ensure Player Turn`, `Start Board & Wait`, and `Apply Player Move` — three blocks per iteration, with the actual decisions (whose turn, did the move hit, is the game over) happening inside the backend responses. v2's main loop contains a single Alternative that branches on a `data.state` variable. Eight named states cover every situation the system can be in: `init`, `choosing_mode`, `loading_game`, `check_turn`, `player_turn`, `apply_player_move`, `computer_turn`, `apply_computer_move`. Every state transition is set explicitly in a Finalize block. This makes the process graph readable as a state diagram and makes the execution log self-documenting — every interesting decision shows up as a CPEE event.
 
 **The frontend now reports events, not raw values.**
-In v1, scanning a board QR code sent the raw coordinate string `"A1"` to CPEE. In v2, it sends a JSON event `{"action":"shoot","coordinate":"A1"}`. The Finalize block in the CPEE process parses the event with a uniform template and dispatches based on the action. This matches a mediator pattern the instructor had pointed to in another student's project: the frontend says what happened, the process decides what it means.
+In v1, scanning a board QR code sent the raw coordinate string `"A1"` to CPEE. In v2, it sends a JSON event `{"action":"shoot","coordinate":"A1"}`. The Finalize block in the CPEE process parses the event with a uniform template and dispatches based on the action. This matches a mediator pattern I was seeking: the frontend says what happened, the process decides what it means.
 
 ### Responsibility Shift: CPEE vs. Backend
 
@@ -51,7 +51,7 @@ Two responsibilities that could have moved to CPEE were kept on the backend deli
 
 **Game-over detection** stays in the backend, returned as `game_over` and `winner` fields on the `_apply-move` response. The rule "all ships sunk = game over" is fixed; it's not a strategy or a policy choice. CPEE reads the boolean and routes accordingly, but it doesn't recompute the condition.
 
-The principle: the architectural mobility belongs at the points where the instructor specifically named the customization gap (computer strategy) and at the points that make the process graph readable as a decision diagram (state transitions, turn routing). Other backend logic — hit detection, win detection, ship placement, persistence — stays where it is, because making it swappable adds complexity without addressing the instructor's actual concerns.
+The principle: the architectural mobility belongs at the points where the customization gap was named clearly (computer strategy) and at the points that make the process graph readable as a decision diagram (state transitions, turn routing). Other backend logic e.g., hit detection, win detection, ship placement, persistence, stays where it is, because making it swappable adds complexity without addressing the actual concerns.
 
 ### What's Still Open
 
