@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Battleship — Ready</title>
+<script src="qrcode.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Segoe UI", system-ui, sans-serif; background: #0a0e17; color: #c8d6e5; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; text-align: center; }
+  .title { font-size: 2rem; font-weight: 700; letter-spacing: 0.12em; color: #f5f6fa; margin-bottom: 6px; }
+  .subtitle { font-size: 0.95rem; color: #4bcffa; margin-bottom: 30px; }
+  .instruction { font-size: 1.1rem; margin-bottom: 20px; }
+  #qr-container { background: #fff; padding: 12px; border-radius: 8px; margin-bottom: 16px; }
+  #qr-container img { display: block; width: 160px; height: 160px; }
+  .scan-label { font-size: 0.85rem; color: #4bcffa; font-weight: 600; margin-bottom: 24px; }
+  #cb-warning { background: #2d1f00; border: 1px solid #6b5a00; color: #ffc312; padding: 8px 14px; border-radius: 4px; font-size: 0.78rem; margin-bottom: 16px; display: none; }
+  .footer { color: #576574; font-size: 0.7rem; margin-top: 10px; }
+  .grid-decoration { display: grid; grid-template-columns: repeat(6, 18px); grid-template-rows: repeat(3, 18px); gap: 3px; margin-bottom: 30px; }
+  .grid-decoration .cell { width: 18px; height: 18px; border-radius: 2px; background: #1e3a5f; }
+  .grid-decoration .cell.ship { background: #1565c0; } .grid-decoration .cell.hit { background: #b71c1c; }
+</style>
+</head>
+<body>
+<div class="title">BATTLESHIP</div>
+<div class="subtitle">QR-Driven Naval Combat</div>
+<div class="grid-decoration"><div class="cell"></div><div class="cell ship"></div><div class="cell ship"></div><div class="cell ship"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell hit"></div><div class="cell"></div><div class="cell"></div><div class="cell ship"></div><div class="cell ship"></div><div class="cell"></div><div class="cell"></div></div>
+<div id="cb-warning">No CPEE callback detected.</div>
+<div class="instruction">Scan the QR code to start the game</div>
+<div id="qr-container"><div id="qr-target" style="width:160px;height:160px;display:flex;align-items:center;justify-content:center;color:#576574;font-size:0.8rem;">Loading...</div></div>
+<div class="scan-label">SCAN TO START</div>
+<div class="footer">CPEE Praktikum — Battleship v2</div>
+<script>
+(function () {
+  var cb = window.name || '';
+  if (!cb) { document.getElementById('cb-warning').style.display = 'block'; document.getElementById('qr-target').textContent = 'No callback'; return; }
+  var dir = window.location.href.substring(0, window.location.href.lastIndexOf('/'));
+  var payload = dir + '/send_new.php?info=' + encodeURIComponent(JSON.stringify({action:"start"})) + '&cb=' + encodeURIComponent(cb);
+  try { var q = qrcode(0, 'L'); q.addData(payload); q.make(); var img = document.createElement('img'); img.src = q.createDataURL(4, 4); var c = document.getElementById('qr-target'); c.innerHTML = ''; c.appendChild(img); } catch (e) { document.getElementById('qr-target').textContent = e.message; }
+})();
+</script>
+</body>
+</html>

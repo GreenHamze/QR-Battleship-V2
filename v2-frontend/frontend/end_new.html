@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Battleship — Game Over</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Segoe UI", system-ui, sans-serif; background: #0a0e17; color: #c8d6e5; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; text-align: center; }
+  .headline { font-size: 2rem; font-weight: 700; letter-spacing: 0.12em; color: #f5f6fa; margin-bottom: 8px; }
+  .divider { width: 60px; height: 2px; background: #576574; margin: 14px 0 24px; }
+  .result { font-size: 2.4rem; font-weight: 800; margin-bottom: 14px; }
+  .result.victory { color: #ffd32a; } .result.loss { color: #fc5c65; } .result.neutral { color: #4bcffa; }
+  .summary { font-size: 1rem; max-width: 400px; margin-bottom: 30px; line-height: 1.5; }
+  .grid-decoration { display: grid; grid-template-columns: repeat(6, 18px); grid-template-rows: repeat(3, 18px); gap: 3px; margin-bottom: 20px; }
+  .grid-decoration .cell { width: 18px; height: 18px; border-radius: 2px; background: #1e3a5f; }
+  .grid-decoration .cell.ship { background: #1565c0; } .grid-decoration .cell.hit { background: #b71c1c; } .grid-decoration .cell.sunk { background: #880e4f; }
+  .footer { color: #576574; font-size: 0.7rem; margin-top: 10px; }
+</style>
+</head>
+<body>
+<div class="headline">BATTLESHIP</div><div class="divider"></div>
+<div id="grid-decoration" class="grid-decoration"></div>
+<div id="result" class="result"></div>
+<div id="summary" class="summary"></div>
+<div class="footer">CPEE Praktikum — Battleship v2</div>
+<script>
+(function () {
+  var winner = (new URLSearchParams(window.location.search).get('winner') || '').toLowerCase().trim();
+  var r = document.getElementById('result'), s = document.getElementById('summary'), g = document.getElementById('grid-decoration');
+  function bg(p) { g.innerHTML = ''; for (var i = 0; i < p.length; i++) { var c = document.createElement('div'); c.className = 'cell ' + p[i]; g.appendChild(c); } }
+  if (winner === 'player') { r.textContent = 'VICTORY'; r.className = 'result victory'; s.textContent = 'All enemy ships sunk. Well played, Commander.'; bg(['','sunk','sunk','sunk','','','','','','','','sunk','','','sunk','sunk','','']); }
+  else if (winner === 'computer') { r.textContent = 'DEFEAT'; r.className = 'result loss'; s.textContent = 'Your fleet has been destroyed. Better luck next time.'; bg(['','sunk','sunk','sunk','','','','','','','','hit','','','sunk','sunk','','']); }
+  else if (winner === 'timeout') { r.textContent = 'TIMED OUT'; r.className = 'result neutral'; s.textContent = 'Game ended \u2014 no response in time.'; bg(['','ship','ship','ship','','','','','','','','','','','ship','ship','','']); }
+  else { r.textContent = 'GAME FINISHED'; r.className = 'result neutral'; s.textContent = 'The game has ended.'; bg(['','ship','ship','ship','','','','','','','','hit','','','ship','ship','','']); }
+})();
+</script>
+</body>
+</html>

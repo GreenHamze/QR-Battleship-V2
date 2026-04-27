@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Battleship — Board</title>
+<script src="qrcode.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Segoe UI", system-ui, sans-serif; background: #0a0e17; color: #c8d6e5; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+  #status-row { display: flex; align-items: stretch; padding: 4px 16px; gap: 12px; border-bottom: 1px solid #1e272e; flex-shrink: 0; }
+  .status-cell { flex: 1; background: #141a26; border: 1px solid #1e272e; border-radius: 4px; padding: 5px 10px; font-size: 0.82rem; }
+  .status-cell .cell-title { font-size: 0.7rem; color: #576574; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .ship-ok { color: #4bcffa; } .ship-sunk { color: #fc5c65; text-decoration: line-through; }
+  .legend-items { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .legend-items span { display: inline-flex; align-items: center; gap: 3px; font-size: 0.78rem; color: #778ca3; }
+  .legend-items .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 2px; }
+  #turn-display { display: flex; flex-direction: column; justify-content: center; }
+  #turn-display .turn-text { font-size: 1.1rem; font-weight: 700; color: #4bcffa; }
+  #turn-display .turn-text.winner { color: #ffd32a; }
+  #turn-display .game-id-text { font-size: 0.7rem; color: #576574; margin-top: 2px; }
+  #boards-row { flex: 1; display: flex; align-items: center; justify-content: center; gap: 40px; padding: 6px 20px; min-height: 0; }
+  .board-section { display: flex; flex-direction: column; align-items: center; }
+  .board-section h2 { font-size: 1rem; margin-bottom: 6px; letter-spacing: 0.04em; }
+  .board-section h2.enemy { color: #fc5c65; } .board-section h2.player { color: #4bcffa; }
+  table.grid { border-collapse: collapse; }
+  table.grid th { font-size: 0.75rem; color: #576574; padding: 2px 0; text-align: center; }
+  table.grid th.row-label { text-align: right; padding-right: 5px; }
+  table.grid td { width: 94px; height: 94px; text-align: center; vertical-align: middle; border: 1px solid #1e272e; font-size: 0.85rem; font-weight: 600; position: relative; }
+  td.cell-unknown { background: #1e3a5f; cursor: crosshair; } td.cell-hit { background: #b71c1c; color: #fff; }
+  td.cell-miss { background: #263238; color: #546e7a; } td.cell-sunk { background: #880e4f; color: #f8bbd0; }
+  td.cell-water { background: #0d253f; } td.cell-ship { background: #1565c0; color: #bbdefb; }
+  td.cell-own-hit { background: #b71c1c; color: #fff; } td.cell-own-miss { background: #263238; color: #546e7a; }
+  td.cell-own-sunk { background: #880e4f; color: #f8bbd0; }
+  td.cell-unknown canvas, td.cell-unknown img { width: 84px; height: 84px; display: block; margin: 3px auto; }
+  #loading, #error { text-align: center; padding: 40px 16px; font-size: 1.2rem; flex: 1; display: flex; align-items: center; justify-content: center; }
+  #error { color: #fc5c65; }
+  #cb-warning { text-align: center; background: #2d1f00; border-bottom: 1px solid #6b5a00; color: #ffc312; padding: 4px 10px; font-size: 0.75rem; display: none; flex-shrink: 0; }
+  .move-info .label { color: #576574; font-size: 0.7rem; } .move-info .coord { font-weight: 700; color: #f5f6fa; }
+  .move-info .result-hit { color: #fc5c65; } .move-info .result-miss { color: #576574; } .move-info .result-sunk { color: #ffd32a; }
+  @media (max-height: 800px) { table.grid td { width: 78px; height: 78px; } td.cell-unknown img { width: 68px; height: 68px; } }
+  @media (min-height: 1200px) { table.grid td { width: 110px; height: 110px; } td.cell-unknown img { width: 100px; height: 100px; } }
+</style>
+</head>
+<body>
+<div id="cb-warning">No CPEE callback detected. QR codes will show coordinate labels only.</div>
+<div id="loading">Loading game...</div>
+<div id="error" style="display:none"></div>
+<div id="status-row" style="display:none">
+  <div class="status-cell" id="fleet-status"></div>
+  <div class="status-cell" id="enemy-sunk-status"></div>
+  <div class="status-cell"><div class="cell-title">Legend</div><div class="legend-items"><span><span class="swatch" style="background:#1e3a5f"></span> Unknown</span><span><span class="swatch" style="background:#b71c1c"></span> Hit</span><span><span class="swatch" style="background:#263238"></span> Miss</span><span><span class="swatch" style="background:#880e4f"></span> Sunk</span><span><span class="swatch" style="background:#1565c0"></span> Ship</span></div></div>
+  <div class="status-cell" id="turn-display"></div>
+</div>
+<div id="boards-row" style="display:none">
+  <div class="board-section"><h2 class="enemy">Enemy Fleet</h2><table class="grid" id="enemy-grid"></table></div>
+  <div class="board-section"><h2 class="player">Your Fleet</h2><table class="grid" id="player-grid"></table></div>
+</div>
+<script>
+(function () {
+  var params = new URLSearchParams(window.location.search);
+  var gameId = params.get('game_id');
+  var pageDir = window.location.href.substring(0, window.location.href.lastIndexOf('/'));
+  var apiBase = params.get('api_base') || (pageDir + '/api_new.php');
+  apiBase = apiBase.replace(/\/+$/, '');
+  var sendBase = params.get('send_base') || pageDir;
+  sendBase = sendBase.replace(/\/+$/, '');
+  var callbackUrl = window.name || '';
+  if (!callbackUrl) document.getElementById('cb-warning').style.display = 'block';
+  var COLS = 'ABCDEF';
+  function coordLabel(c, r) { return COLS[c] + (r + 1); }
+  if (!gameId) { showError('Missing game_id parameter.'); return; }
+  fetchView();
+  async function fetchView() {
+    try {
+      var res = await fetch(apiBase + '/game/_view?game_id=' + encodeURIComponent(gameId));
+      if (!res.ok) { var e = await res.json().catch(function(){return{};}); throw new Error(e.error || 'HTTP ' + res.status); }
+      render(await res.json());
+    } catch (e) { showError('Failed to load game: ' + e.message); }
+  }
+  function render(v) {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('status-row').style.display = 'flex';
+    document.getElementById('boards-row').style.display = 'flex';
+    renderTurn(v); renderFleet(v.player_board.ships); renderSunk(v.computer_board.ships_sunk);
+    renderGrid('enemy-grid', v.enemy_grid, v.turn === 'player' && !v.game_over, true);
+    renderGrid('player-grid', v.player_grid, false, false);
+  }
+  function renderTurn(v) {
+    var el = document.getElementById('turn-display');
+    var h = '<div class="cell-title">Status</div>';
+    if (v.game_over) { h += '<div class="turn-text winner">GAME OVER \u2014 ' + (v.winner === 'player' ? 'VICTORY!' : 'DEFEAT') + '</div>'; }
+    else { h += '<div class="turn-text">' + (v.turn === 'player' ? 'Your turn \u2014 scan to fire' : "Computer's turn...") + '</div>'; }
+    h += '<div class="game-id-text">Game: ' + v.game_id + '</div>';
+    if (v.last_player_move || v.last_computer_move) {
+      h += '<div style="margin-top:4px;font-size:0.75rem">';
+      if (v.last_player_move) { var m = v.last_player_move; var c = m.sunk ? 'result-sunk' : (m.result==='hit' ? 'result-hit' : 'result-miss'); h += '<span class="move-info"><span class="label">You:</span> <span class="coord">' + m.coordinate + '</span> <span class="' + c + '">' + (m.sunk ? 'SUNK' : m.result.toUpperCase()) + '</span></span> '; }
+      if (v.last_computer_move) { var m2 = v.last_computer_move; var c2 = m2.sunk ? 'result-sunk' : (m2.result==='hit' ? 'result-hit' : 'result-miss'); h += '<span class="move-info"><span class="label">CPU:</span> <span class="coord">' + m2.coordinate + '</span> <span class="' + c2 + '">' + (m2.sunk ? 'SUNK' : m2.result.toUpperCase()) + '</span></span>'; }
+      h += '</div>';
+    }
+    el.innerHTML = h;
+  }
+  function renderFleet(ships) { var el = document.getElementById('fleet-status'); var h = '<div class="cell-title">Your Fleet</div>'; for (var i = 0; i < ships.length; i++) { var s = ships[i]; h += '<div class="' + (s.sunk ? 'ship-sunk' : 'ship-ok') + '">' + s.name + ' (' + s.size + ') \u2014 ' + (s.sunk ? 'SUNK' : s.hits + '/' + s.size) + '</div>'; } el.innerHTML = h; }
+  function renderSunk(sunk) { var el = document.getElementById('enemy-sunk-status'); var h = '<div class="cell-title">Enemy Ships Sunk</div>'; if (!sunk || sunk.length === 0) { h += '<div style="color:#576574">None yet</div>'; } else { for (var i = 0; i < sunk.length; i++) h += '<div class="ship-sunk">' + sunk[i].name + ' (' + sunk[i].size + ')</div>'; } el.innerHTML = h; }
+  function renderGrid(tableId, grid, showQR, isEnemy) {
+    var table = document.getElementById(tableId); table.innerHTML = '';
+    var hr = document.createElement('tr'); hr.innerHTML = '<th></th>'; for (var c = 0; c < 6; c++) hr.innerHTML += '<th>' + COLS[c] + '</th>'; table.appendChild(hr);
+    for (var r = 0; r < 6; r++) {
+      var tr = document.createElement('tr'); tr.innerHTML = '<th class="row-label">' + (r+1) + '</th>';
+      for (var c = 0; c < 6; c++) {
+        var val = grid[r][c]; var td = document.createElement('td'); var coord = coordLabel(c, r);
+        if (isEnemy) {
+          if (val === null) { td.className = 'cell-unknown'; td.title = coord; if (showQR) renderQR(td, coord); else td.textContent = '\u00b7'; }
+          else if (val === 'hit') { td.className = 'cell-hit'; td.textContent = '\u2715'; }
+          else if (val === 'miss') { td.className = 'cell-miss'; td.textContent = '\u25cb'; }
+          else if (val === 'sunk') { td.className = 'cell-sunk'; td.textContent = '\u2715'; }
+        } else {
+          if (val === null) { td.className = 'cell-water'; td.textContent = '\u00b7'; }
+          else if (val === 'ship') { td.className = 'cell-ship'; td.textContent = '\u25a0'; }
+          else if (val === 'hit') { td.className = 'cell-own-hit'; td.textContent = '\u2715'; }
+          else if (val === 'miss') { td.className = 'cell-own-miss'; td.textContent = '\u25cb'; }
+          else if (val === 'sunk') { td.className = 'cell-own-sunk'; td.textContent = '\u2715'; }
+        }
+        tr.appendChild(td);
+      }
+      table.appendChild(tr);
+    }
+  }
+  function renderQR(td, coordinate) {
+    if (!callbackUrl) { td.textContent = coordinate; td.style.fontSize = '0.75rem'; td.style.color = '#4bcffa'; return; }
+    var payload = sendBase + '/send_new.php?info=' + encodeURIComponent(JSON.stringify({action:'shoot',coordinate:coordinate})) + '&cb=' + encodeURIComponent(callbackUrl);
+    try { var q = qrcode(0, 'L'); q.addData(payload); q.make(); var img = document.createElement('img'); img.src = q.createDataURL(2, 0); img.alt = coordinate; td.textContent = ''; td.appendChild(img); }
+    catch (e) { td.textContent = coordinate; td.style.fontSize = '0.75rem'; td.style.color = '#ffc312'; }
+  }
+  function showError(msg) { document.getElementById('loading').style.display = 'none'; var el = document.getElementById('error'); el.style.display = 'flex'; el.textContent = msg; }
+})();
+</script>
+</body>
+</html>

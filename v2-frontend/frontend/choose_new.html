@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Battleship — Choose</title>
+<script src="qrcode.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Segoe UI", system-ui, sans-serif; background: #0a0e17; color: #c8d6e5; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; text-align: center; }
+  .title { font-size: 2rem; font-weight: 700; letter-spacing: 0.12em; color: #f5f6fa; margin-bottom: 6px; }
+  .subtitle { font-size: 0.95rem; color: #4bcffa; margin-bottom: 30px; }
+  #cb-warning { background: #2d1f00; border: 1px solid #6b5a00; color: #ffc312; padding: 8px 14px; border-radius: 4px; font-size: 0.78rem; margin-bottom: 16px; display: none; }
+  .choices { display: flex; gap: 40px; flex-wrap: wrap; justify-content: center; margin-bottom: 24px; }
+  .choice { display: flex; flex-direction: column; align-items: center; }
+  .choice-label { font-size: 1rem; font-weight: 700; margin-bottom: 10px; }
+  .choice-label.new-game { color: #4bcffa; } .choice-label.continue-game { color: #ffd32a; }
+  .qr-box { background: #fff; padding: 10px; border-radius: 8px; margin-bottom: 8px; }
+  .qr-box img { display: block; width: 140px; height: 140px; }
+  .choice-hint { font-size: 0.75rem; color: #576574; }
+  .footer { color: #576574; font-size: 0.7rem; margin-top: 10px; }
+</style>
+</head>
+<body>
+<div class="title">BATTLESHIP</div>
+<div class="subtitle">Choose your mission</div>
+<div id="cb-warning">No CPEE callback detected.</div>
+<div class="choices">
+  <div class="choice"><div class="choice-label new-game">NEW GAME</div><div class="qr-box"><div id="qr-new" style="width:140px;height:140px;display:flex;align-items:center;justify-content:center;color:#576574;">Loading...</div></div><div class="choice-hint">Start a fresh battle</div></div>
+  <div class="choice"><div class="choice-label continue-game">CONTINUE</div><div class="qr-box"><div id="qr-continue" style="width:140px;height:140px;display:flex;align-items:center;justify-content:center;color:#576574;">Loading...</div></div><div class="choice-hint">Resume last game</div></div>
+</div>
+<div class="footer">CPEE Praktikum — Battleship v2</div>
+<script>
+(function () {
+  var cb = window.name || '';
+  if (!cb) { document.getElementById('cb-warning').style.display = 'block'; document.getElementById('qr-new').textContent = 'No callback'; document.getElementById('qr-continue').textContent = 'No callback'; return; }
+  var dir = window.location.href.substring(0, window.location.href.lastIndexOf('/'));
+  function rQR(elId, obj) {
+    var payload = dir + '/send_new.php?info=' + encodeURIComponent(JSON.stringify(obj)) + '&cb=' + encodeURIComponent(cb);
+    try { var q = qrcode(0, 'L'); q.addData(payload); q.make(); var img = document.createElement('img'); img.src = q.createDataURL(3, 3); var c = document.getElementById(elId); c.innerHTML = ''; c.appendChild(img); } catch (e) { document.getElementById(elId).textContent = e.message; }
+  }
+  rQR('qr-new', {action:'new'});
+  rQR('qr-continue', {action:'continue'});
+})();
+</script>
+</body>
+</html>
