@@ -9,7 +9,7 @@ This v2 lives in its own repository so the two versions can be compared side by 
 After v1 was presented, three concerns about the architecture were raised:
 
 1. **No real separation of concerns.** The project was built like a developer would write it, not like an architect would design it. UI, state, and decision logic were entangled.
-2. **No real mediator.** CPEE was technically between the UI and the backend, but it was orchestrating at too high a level — the backend was making most of the interesting decisions.
+2. **No real mediator.** CPEE was technically between the UI and the backend, but it was orchestrating at too high a level, the backend was making most of the interesting decisions.
 3. **Computer logic should be swappable without touching backend code.** Because the computer's strategy lived inside the backend's `ensure-player-turn` endpoint, swapping strategies required editing the Node.js source.
 
 A fourth, related observation: **the CPEE log should tell you everything without needing Celonis.** In v1, the log read "called `ensure-player-turn` → got result back." The interesting decisions (whose turn, where to shoot, did someone win) were inside the backend, invisible to CPEE's log.
@@ -19,13 +19,13 @@ v2 addresses each of these concerns with a specific change.
 ### What Changed and Why
 
 **The `ensure-player-turn` endpoint was split into two narrower endpoints.**
-v1's `ensure-player-turn` bundled three concerns into one call: check whose turn it is, choose a coordinate if the computer is up, apply the move. v2 separates these. `_whose-turn` is a pure read — given a game ID, return whose turn it is and whether the game is over. `_apply-move` is a neutral mutation — given a game ID, an actor (`player` or `computer`), and a coordinate, apply the move. The two are composed by the CPEE process, not bundled inside the backend.
+v1's `ensure-player-turn` bundled three concerns into one call: check whose turn it is, choose a coordinate if the computer is up, apply the move. v2 separates these. `_whose-turn` is a pure read, given a game ID, return whose turn it is and whether the game is over. `_apply-move` is a neutral mutation, given a game ID, an actor (`player` or `computer`), and a coordinate, apply the move. The two are composed by the CPEE process, not bundled inside the backend.
 
 **Computer strategy moved into the CPEE process as a Script block.**
 v1 had a `pickRandomTarget` function inside `services/computerService.js`, called automatically by `ensure-player-turn`. To change the computer's strategy, you had to edit Node.js code, redeploy the service, and restart it. In v2, the strategy lives in a CPEE Script block named `Strategy: Pick Target`. It reads the player's board state from `_view`, picks a coordinate in plain Ruby, and writes it to a CPEE data variable. To swap strategies, you edit one block in the CPEE cockpit. No code deploy, no backend touch, no service restart. 
 
 **The CPEE process became an explicit state machine.**
-v1's main loop alternated between `Ensure Player Turn`, `Start Board & Wait`, and `Apply Player Move` — three blocks per iteration, with the actual decisions (whose turn, did the move hit, is the game over) happening inside the backend responses. v2's main loop contains a single Alternative that branches on a `data.state` variable. Eight named states cover every situation the system can be in: `init`, `choosing_mode`, `loading_game`, `check_turn`, `player_turn`, `apply_player_move`, `computer_turn`, `apply_computer_move`. Every state transition is set explicitly in a Finalize block. This makes the process graph readable as a state diagram and makes the execution log self-documenting — every interesting decision shows up as a CPEE event.
+v1's main loop alternated between `Ensure Player Turn`, `Start Board & Wait`, and `Apply Player Move`. Three blocks per iteration, with the actual decisions (whose turn, did the move hit, is the game over) happening inside the backend responses. v2's main loop contains a single Alternative that branches on a `data.state` variable. Eight named states cover every situation the system can be in: `init`, `choosing_mode`, `loading_game`, `check_turn`, `player_turn`, `apply_player_move`, `computer_turn`, `apply_computer_move`. Every state transition is set explicitly in a Finalize block. This makes the process graph readable as a state diagram and makes the execution log self-documenting, every interesting decision shows up as a CPEE event.
 
 **The frontend now reports events, not raw values.**
 In v1, scanning a board QR code sent the raw coordinate string `"A1"` to CPEE. In v2, it sends a JSON event `{"action":"shoot","coordinate":"A1"}`. The Finalize block in the CPEE process parses the event with a uniform template and dispatches based on the action. This matches a mediator pattern I was seeking: the frontend says what happened, the process decides what it means.
@@ -47,7 +47,7 @@ In v1, scanning a board QR code sent the raw coordinate string `"A1"` to CPEE. I
 
 Two responsibilities that could have moved to CPEE were kept on the backend deliberately.
 
-**Hit/miss/sunk detection** stays in the backend's `applyAttack` function. Hit detection is plumbing — given a coordinate and a board, did it hit a ship? — not a rule anyone would want to swap. Implementing it as Ruby in CPEE would add code without adding architectural mobility.
+**Hit/miss/sunk detection** stays in the backend's `applyAttack` function. Hit detection is plumbing — given a coordinate and a board, did it hit a ship? not a rule anyone would want to swap. Implementing it as Ruby in CPEE would add code without adding architectural mobility.
 
 **Game-over detection** stays in the backend, returned as `game_over` and `winner` fields on the `_apply-move` response. The rule "all ships sunk = game over" is fixed; it's not a strategy or a policy choice. CPEE reads the boolean and routes accordingly, but it doesn't recompute the condition.
 
@@ -55,7 +55,7 @@ The principle: the architectural mobility belongs at the points where the custom
 
 ### What's Still Open
 
-This refactor addresses the named complaints. There is more architectural mobility achievable if desired — for example, the backend could be reduced to a key-value store with the entire game-rule layer moved into CPEE, more in line with mediator patterns where the backend has no domain knowledge. Whether that's worthwhile is a judgment call about how much process-level customization is wanted versus how much domain logic genuinely belongs server-side. The current submission is the version that addresses the specific feedback; further iteration is a conversation to have, not a change to make unilaterally.
+This refactor addresses the named complaints. There is more architectural mobility achievable if desired, for example, the backend could be reduced to a key-value store with the entire game-rule layer moved into CPEE, more in line with mediator patterns where the backend has no domain knowledge. Whether that's worthwhile is a judgment call about how much process-level customization is wanted versus how much domain logic genuinely belongs server-side. The current submission is the version that addresses the specific feedback; further iteration is a conversation to have, not a change to make unilaterally.
 
 ## The CPEE Process
 
@@ -95,9 +95,9 @@ End Frame
 
 ### Key blocks
 
-**Strategy: Pick Target.** The architectural payoff. A Script block in the `computer_turn` state branch. Reads `data.board_state` (populated by the preceding `Fetching Current Game State` block), picks a coordinate, writes it to `data.chosen_coordinate`, and advances state to `apply_computer_move`. The currently implemented strategy is `random` — pick uniformly from untargeted cells. To swap strategies (for example, to a parity strategy that prefers cells where `(col + row) % 2 == 0`), edit the body of this one block in the CPEE cockpit. Nothing else changes.
+**Strategy: Pick Target.** The architectural payoff. A Script block in the `computer_turn` state branch. Reads `data.board_state` (populated by the preceding `Fetching Current Game State` block), picks a coordinate, writes it to `data.chosen_coordinate`, and advances state to `apply_computer_move`. The currently implemented strategy is `random`, pick uniformly from untargeted cells. To swap strategies (for example, to a parity strategy that prefers cells where `(col + row) % 2 == 0`), edit the body of this one block in the CPEE cockpit. Nothing else changes.
 
-**Check Whose Turn.** A service call that hits `_whose-turn`. Its Finalize reads the response and routes to `player_turn`, `computer_turn`, or `game_over`. This block is the pivot of the state machine — after every move, control returns here, and the routing decision is logged as a CPEE event.
+**Check Whose Turn.** A service call that hits `_whose-turn`. Its Finalize reads the response and routes to `player_turn`, `computer_turn`, or `game_over`. This block is the pivot of the state machine. After every move, control returns here, and the routing decision is logged as a CPEE event.
 
 **Apply Player Move and Apply Computer Move.** Two service calls, both targeting the same `_apply-move` endpoint with different `actor` parameters. Same response shape, same Finalize structure. The neutrality of the underlying endpoint is what makes this symmetry possible.
 
@@ -325,13 +325,13 @@ Raw game state dump for debugging. Exposes all ship positions; not used by the C
 | `GET /game/:id/status` | Replaced by `_whose-turn`. |
 | `GET /timeout/:seconds` | Timeout handling lives in CPEE's heartbeat branch (powernap polling), not as a backend endpoint. |
 
-The removed endpoints have no replacements that bundle multiple concerns. Where a v2 caller needs more than one piece of information, it composes multiple narrow endpoint calls — which is exactly what makes the responsibility shift visible.
+The removed endpoints have no replacements that bundle multiple concerns. Where a v2 caller needs more than one piece of information, it composes multiple narrow endpoint calls, which is exactly what makes the responsibility shift visible.
 
 ## Game Specifications
 
 - 6×6 board, columns A–F, rows 1–6
 - Three ships per side: Cruiser (size 3), Destroyer (size 2), Patrol (size 2)
-- Random placement — no manual ship positioning
+- Random placement, no manual ship positioning
 - Game state persisted as JSON files in `server/games/`
 
 ## Infrastructure Notes
@@ -348,7 +348,7 @@ All v2 pages use a `_new` suffix to coexist with v1's original pages. Functional
 - `choose_new.html` sends `{"action":"new"}` or `{"action":"continue"}`
 - `board_new.html` sends `{"action":"shoot","coordinate":"B4"}` (TV landscape layout)
 - `end_new.html` reads `?winner=` from the URL, no events
-- `send_new.php` is the QR callback bridge — passes JSON payloads to CPEE unchanged with `Content-Type: application/json`
+- `send_new.php` is the QR callback bridge, passes JSON payloads to CPEE unchanged with `Content-Type: application/json`
 
 ### Coexistence with v1
 
