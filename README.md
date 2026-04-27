@@ -62,7 +62,7 @@ This refactor addresses the named complaints. There is more architectural mobili
 <img width="571" height="935" alt="CPEE Graph" src="https://github.com/user-attachments/assets/ef6b1249-14c9-4fbe-8922-49243a96908b" />
 
 
-The graph shows the v2 process. The dominant structure is the state-routing Alternative inside the main loop — every named state branch is visible, each guarded by a `data.state == "..."` condition. The architectural change from v1 is visible at a glance: in v1, the loop body had three sequential blocks; in v2, the loop body is a state machine with eight branches.
+The graph shows the v2 process. The dominant structure is the state-routing Alternative inside the main loop, every named state branch is visible, each guarded by a `data.state == "..."` condition. The architectural change from v1 is visible at a glance: in v1, the loop body had three sequential blocks; in v2, the loop body is a state machine with eight branches.
 
 ### Top-level structure
 
